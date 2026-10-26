@@ -44,7 +44,9 @@ export class TicketShelf {
     return { ...value, posterPath };
   }
   async handle(request, response) {
-    const url = new URL(request.url, this.auth.origin);
+    let url;
+    try { url = new URL(request.url, this.auth.origin); }
+    catch { response.writeHead(400, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify({ error: '無法辨識這個網址。' })); return true; }
     if (url.pathname !== '/tickets' && !url.pathname.startsWith('/tickets/') && !url.pathname.startsWith('/api/')) return false;
     const send = (status, value) => {
       response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });

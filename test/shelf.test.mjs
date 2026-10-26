@@ -108,7 +108,10 @@ test('signed LINE shelf command issues a URI entry without AI calls; unsigned re
 });
 
 test('static shell has restricted CSP and demo never exposes server data', async t => {
-  const { call } = await setup(t); const response = await call('/tickets/?preview=1'); assert.equal(response.status, 200); assert.match(response.headers.get('content-security-policy'), /object-src 'none'/);
+  const { call, shelf } = await setup(t); const response = await call('/tickets/?preview=1'); assert.equal(response.status, 200); assert.match(response.headers.get('content-security-policy'), /object-src 'none'/);
+  let status;
+  assert.equal(await shelf.handle({ url: 'http://%' }, { writeHead: value => { status = value; }, end: () => {} }), true);
+  assert.equal(status, 400);
   assert.equal((await call('/tickets/../src/store.mjs')).status, 404); assert.equal((await call('/api/tickets?preview=1')).status, 401);
   const config = await (await call('/api/config')).json(); assert.deepEqual(config, { liffId: '', lineLoginReady: false });
 });
