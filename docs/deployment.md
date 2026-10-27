@@ -93,3 +93,10 @@ Google Free Tier 提供符合資格地區的每月一台 e2-micro 使用時數�
 目前已取得 Developing LIFF ID `2012222030-OFWyoaEd`，配對 Channel ID `2012222030`，`LIFF_APP_TYPE=miniapp`。Bot 入口使用 `https://miniapp.line.me/`，後端驗證仍固定檢查該 Channel ID 的 audience。Review／Published 尚未啟用。
 
 LINE Console 的 Endpoint URL 與測試者邀請需另行確認，與 Google Cloud Secret Manager 設定是不同的操作。更新前會建立 `pre-miniapp-20261027.sqlite` 線上備份，保留既有票根；設定更新後需重新載入服務。
+
+
+## 2026-10-27 切換 Published
+
+正式 LIFF ID 改為 `2012222034-AVyO2nk3`，配對 Channel ID `2012222034`；`LIFF_APP_TYPE=miniapp` 與原 HTTPS origin 維持一致。Published 公開入口頁中的 Endpoint URL 已核對為票匣網址。此變更只更新 Secret Manager 並重新載入既有服務，程式執行版本維持 `afcb7ccf69ab7bd742b612eddd1e98aa642672f5`。
+
+更新前另建 SQLite 線上備份 `pre-published-20261027.sqlite`，原 Developing 備份繼續保留。Developing 的公開 ID 保留在設定文件，正式 Bot 不再指向它。目前是未認證 MINI App；切換 Published 不代表取得 LINE 認證標章。

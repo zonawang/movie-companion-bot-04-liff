@@ -6,24 +6,26 @@
 
 | 環境 | Channel ID | LIFF ID / 狀態 |
 | --- | --- | --- |
-| Developing | `2012222030` | `2012222030-OFWyoaEd`，目前接入供測試 |
+| Developing | `2012222030` | `2012222030-OFWyoaEd`，保留作開發用途，目前伺服器未使用此環境 |
 | Review | `2012222032` | 尚未提供對應 LIFF ID，未啟用 |
-| Published | `2012222034` | 尚未提供對應 LIFF ID，未啟用 |
+| Published | `2012222034` | `2012222034-AVyO2nk3`，目前正式使用 |
 
-[Developing MINI App 入口](https://miniapp.line.me/2012222030-OFWyoaEd)。在 LINE Developers 的 **Web app settings** 確認 Developing Endpoint URL 為 `https://movie-bot-03.136-67-154-252.sslip.io/tickets/`，儲存後再開啟入口。若仍是 `https://developers.line.biz/assets/liff-default-dev.html`，會開啟 LINE 示範頁而不是票匣。
+[Published MINI App 正式入口](https://miniapp.line.me/2012222034-AVyO2nk3)。LINE Developers 的 **Web app settings** 中 Published Endpoint URL 已確認為 `https://movie-bot-03.136-67-154-252.sslip.io/tickets/`。Bot 與網頁登入都使用 Published 的 ID 配對。
 
-Developing 僅提供給已接受權限邀請的測試者。需要在 Roles 管理測試權限，並確認開啟 MINI App 的 LINE 帳號就是受邀帳號。Provider 必須與 Zona Movie 一致，才能讀到既有票根。
+目前的 MINI App 是未認證狀態。Published 為一般使用者使用的環境；認證 MINI App 的審核、標章與進階功能是另外的流程。使用者必須完成自己的 LINE 授權才能讀取私人收藏。
+
+Developing 僅供測試者使用，保留其公開識別碼作開發紀錄。現在伺服器固定使用 Published 的 LIFF ID，因此若要另外測試 Developing，應另設測試部署並配對 Developing 的兩個 ID；不要用 Developing 入口開啟此正式部署後預期它接受不同環境的憑證。Provider 必須與 Zona Movie 一致，才能讀到既有票根。
 
 雲端應用設定：
 
 ```dotenv
-LIFF_ID=2012222030-OFWyoaEd
-LINE_LOGIN_CHANNEL_ID=2012222030
+LIFF_ID=2012222034-AVyO2nk3
+LINE_LOGIN_CHANNEL_ID=2012222034
 LIFF_APP_TYPE=miniapp
 PUBLIC_BASE_URL=https://movie-bot-03.136-67-154-252.sslip.io
 ```
 
-`LINE_LOGIN_CHANNEL_ID` 沿用程式設定名稱，也適用 MINI App。這不是原 Messaging API 的 Channel ID。正式對外使用時，請取得 Published 那一組的 LIFF URL，同時替換兩個 ID，並依 LINE 流程確認 Published 的 endpoint 與開放狀態。不可只替換 Channel ID，也不可假設三組 LIFF ID 的後綴相同。
+`LINE_LOGIN_CHANNEL_ID` 沿用程式設定名稱，也適用 MINI App。這不是原 Messaging API 的 Channel ID。目前已使用 Published 那一組的 LIFF URL 與兩個 ID，並確認其 Endpoint URL。之後變更環境時仍須同時替換兩個 ID。不可只替換 Channel ID，也不可假設三組 LIFF ID 的後綴相同。
 
 參考：[MINI App Console 指南](https://developers.line.biz/en/docs/line-mini-app/discover/console-guide/)。以下保留一般 LINE Login LIFF 的自架設定流程。
 
