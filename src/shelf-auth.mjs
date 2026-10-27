@@ -88,4 +88,27 @@ export class ShelfAuth {
       || !Number.isFinite(profile.exp) || profile.exp * 1000 <= this.now()) throw new AuthError(401, '無法確認 LINE 身分，請重新登入。');
     return this.createSession(request, response, { actor: profile.sub, name: typeof profile.name === 'string' ? profile.name : '電影旅人', expires: profile.exp * 1000 });
   }
+  async loginAccessToken(request, response, accessToken) {
+    if (!this.channelId) throw new AuthError(503, 'LINE 登入準備中，請稍後再試。');
+    if (typeof accessToken !== 'string' || !/^[\x21-\x7e]{20,10000}$/.test(accessToken)) throw new AuthError(401, '無法確認 LINE 身分，請重新登入。');
+    const verifiedAt = this.now();
+    const verifyUrl = new URL('https://api.line.me/oauth2/v2.1/verify');
+    verifyUrl.searchParams.set('access_token', accessToken);
+    const call = async (url, options = {}) => {
+      let result;
+      try { result = await this.fetcher(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(5000) }); }
+      catch { throw new AuthError(503, 'LINE 登入暫時無法連線，請稍後再試。'); }
+      if (result.status === 429 || result.status >= 500) throw new AuthError(503, 'LINE 登入暫時無法使用，請稍後再試。');
+      if (!result.ok) throw new AuthError(401, 'LINE 登入已失效，請重新開啟票匣。');
+      try { return await result.json(); } catch { throw new AuthError(503, 'LINE 登入暫時無法使用。'); }
+    };
+    const verified = await call(verifyUrl);
+    if (String(verified.client_id) !== this.channelId || !Number.isFinite(verified.expires_in) || verified.expires_in <= 0) throw new AuthError(401, '無法確認 LINE 身分，請重新登入。');
+    if (typeof verified.scope !== 'string' || !verified.scope.split(/\s+/).includes('profile')) throw new AuthError(403, 'LINE 尚未提供登入所需的個人資料授權，請重新授權後再試。');
+    // Only LINE's server may supply the actor. Never trust profile/userId values posted by the browser.
+    const profile = await call('https://api.line.me/v2/profile', { headers: { Authorization: `Bearer ${accessToken}` } });
+    const expires = verifiedAt + verified.expires_in * 1000;
+    if (typeof profile.userId !== 'string' || !/^U[0-9a-f]{32}$/.test(profile.userId) || expires <= this.now()) throw new AuthError(401, '無法確認 LINE 身分，請重新登入。');
+    return this.createSession(request, response, { actor: profile.userId, name: typeof profile.displayName === 'string' ? profile.displayName : '電影旅人', expires });
+  }
 }

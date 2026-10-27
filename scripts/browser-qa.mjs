@@ -54,5 +54,33 @@ await mkdir('browser-results', { recursive: true });
  await loginPage.waitForFunction(() => document.getElementById('user-name').textContent === '入口使用者');
  assert.equal(new URL(loginPage.url()).hash,'');
  await loginPage.close();
+ // Reproduce the reported MINI App state: LINE says logged in, but getIDToken() returns null.
+ const accessPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+ accessPage.on('pageerror', error => errors.push(error.message)); let accessExchanges = 0;
+ await accessPage.route('**/api/config', route => route.fulfill({ json: { liffId: '2012222034-AVyO2nk3', lineLoginReady: true, liffUrl: 'https://miniapp.line.me/2012222034-AVyO2nk3' } }));
+ await accessPage.route('https://static.line-scdn.net/liff/edge/2/sdk.js', route => route.fulfill({ contentType: 'text/javascript', body: `window.profileConsentCount=0;window.sdkInitCount=0;window.liff={init:async()=>{window.sdkInitCount++},isLoggedIn:()=>true,isInClient:()=>true,getIDToken:()=>null,getAccessToken:()=>'fixture-user-access-token',permission:{query:async()=>({state:window.profileConsentCount?'granted':'prompt'})},getProfile:async()=>{window.profileConsentCount++;return {userId:'untrusted-client-value'}}}` }));
+ await accessPage.route('**/api/auth/line', async route => {
+   assert.deepEqual(route.request().postDataJSON(), { accessToken: 'fixture-user-access-token' }); accessExchanges++;
+   await route.fulfill(accessExchanges === 1 ? { status: 503, json: { error: 'LINE 暫時無法連線，請再試一次。' } } : { json: { user: { displayName: '後端驗證的帳號' }, csrfToken: 'access-csrf' } });
+ });
+ await accessPage.route('**/api/tickets?*', route => route.fulfill({ json: emptyShelf }));
+ await accessPage.goto('http://127.0.0.1:3104/tickets/');
+ await accessPage.waitForFunction(() => document.getElementById('gate-message').textContent.includes('請再試一次'));
+ assert.equal(await accessPage.locator('#login').isEnabled(), true); assert.equal(await accessPage.locator('#liff-link').getAttribute('href'), 'https://miniapp.line.me/2012222034-AVyO2nk3');
+ await accessPage.locator('#login').click();
+ await accessPage.waitForFunction(() => document.getElementById('user-name').textContent === '後端驗證的帳號');
+ assert.equal(accessExchanges, 2); assert.equal(await accessPage.evaluate(()=>window.sdkInitCount),1); assert.equal(await accessPage.evaluate(()=>window.profileConsentCount),1);
+ await accessPage.screenshot({path:'browser-results/mobile-access-token-login.png',fullPage:true});
+ await accessPage.close();
+ // A blocked SDK request must show a usable retry button and reload the script on the next tap.
+ const retryPage = await browser.newPage(); let sdkLoads = 0;
+ retryPage.on('pageerror', error => errors.push(error.message));
+ await retryPage.route('**/api/config', route => route.fulfill({ json: { liffId: '2012222034-AVyO2nk3', lineLoginReady: true } }));
+ await retryPage.route('https://static.line-scdn.net/liff/edge/2/sdk.js', route => ++sdkLoads === 1 ? route.abort('failed') : route.fulfill({ contentType: 'text/javascript', body: `window.liff={init:async()=>{},isLoggedIn:()=>true,getIDToken:()=>'fixture-id-token-from-line'}` }));
+ await retryPage.route('**/api/auth/line', route => route.fulfill({ json: { user: { displayName: '重試成功' }, csrfToken: 'retry-csrf' } }));
+ await retryPage.route('**/api/tickets?*', route => route.fulfill({ json: emptyShelf }));
+ await retryPage.goto('http://127.0.0.1:3104/tickets/'); await retryPage.waitForFunction(()=>document.getElementById('gate-message').textContent.includes('載入失敗'));
+ await retryPage.locator('#login').click(); await retryPage.waitForFunction(()=>document.getElementById('user-name').textContent==='重試成功');
+ assert.equal(sdkLoads,2); await retryPage.close();
  assert.deepEqual(errors,[]); console.log('Browser QA passed: desktop/mobile, filters, add/edit/delete, verbatim note, XSS, unauthenticated gate, no overflow.'); await browser.close();
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>server.kill('SIGTERM'));

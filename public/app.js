@@ -30,6 +30,9 @@ function cover(ticket, index = 0) {
 function gate(message, canLogin = false) {
   $('gate').hidden = false; $('shelf').hidden = true; $('gate-message').textContent = message;
   $('login').hidden = !canLogin; $('line-link').hidden = false; $('preview-link').hidden = false; $('logout').hidden = true;
+  const liffUrl = liffConfig?.liffUrl || '';
+  $('liff-link').hidden = !/^https:\/\/(?:miniapp|liff)\.line\.me\/\d+-[A-Za-z0-9]+$/.test(liffUrl);
+  if (!$('liff-link').hidden) $('liff-link').href = liffUrl;
 }
 async function enter(session) {
   csrf = session.csrfToken || ''; $('user-name').textContent = demo ? '電影旅人 / DEMO' : session.user.displayName;
@@ -135,17 +138,62 @@ async function deleteTicket() {
   } catch (error) { $('delete-error').textContent = error.message; }
   finally { $('confirm-delete').disabled = false; }
 }
-let liffConfig;
+let liffConfig, sdkLoading, sdkInitializing, loginInFlight = false;
+function loginError(message) { const error = new Error(message); error.userMessage = true; return error; }
+async function bounded(promise, message, milliseconds = 15000) {
+  let timer;
+  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(loginError(message)), milliseconds); })]); }
+  finally { clearTimeout(timer); }
+}
+async function loadLineSdk() {
+  if (window.liff) return;
+  if (!sdkLoading) {
+    const script = document.createElement('script'); script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
+    sdkLoading = bounded(new Promise((resolve, reject) => {
+      script.onload = () => window.liff ? resolve() : reject(loginError('LINE 登入元件載入失敗，請再試一次。'));
+      script.onerror = () => reject(loginError('LINE 登入元件載入失敗，請檢查連線後再試。'));
+      document.head.append(script);
+    }), '載入 LINE 登入逾時，請檢查連線後再試。').catch(error => { script.remove(); sdkLoading = null; throw error; });
+  }
+  await sdkLoading;
+}
 async function lineLogin() {
-  $('login').disabled = true;
+  if (loginInFlight) return;
+  loginInFlight = true; $('login').disabled = true; $('login').textContent = '登入中…';
+  $('gate-message').textContent = '正在確認你的 LINE 身分…';
   try {
-    if (!window.liff) await new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js'; script.onload = resolve; script.onerror = () => reject(new Error('LINE 登入元件載入失敗，請檢查連線後再試。')); document.head.append(script); });
-    await window.liff.init({ liffId: liffConfig.liffId });
-    if (!window.liff.isLoggedIn()) { window.liff.login({ redirectUri: location.origin + '/tickets/' }); return; }
-    const idToken = window.liff.getIDToken(); if (!idToken) throw new Error('登入未提供身分資訊，請確認 LIFF 的 openid 權限。');
-    await enter(await api('/auth/line', { method: 'POST', body: { idToken } }));
-  } catch (error) { gate(error.message, true); }
-  finally { $('login').disabled = false; }
+    await loadLineSdk();
+    if (!sdkInitializing) sdkInitializing = window.liff.init({ liffId: liffConfig.liffId }).catch(error => { sdkInitializing = null; throw error; });
+    await bounded(sdkInitializing, 'LINE 回應逾時，請重新在 LINE 開啟票匣後再試。', 20000);
+    if (!window.liff.isLoggedIn()) {
+      if (window.liff.isInClient?.()) throw loginError('LINE 授權尚未完成，請點「重新在 LINE 開啟」後同意授權。');
+      $('gate-message').textContent = '正在前往 LINE 授權頁面…';
+      window.liff.login({ redirectUri: location.origin + '/tickets/' }); return;
+    }
+    const idToken = window.liff.getIDToken(); let credential;
+    if (idToken) credential = { idToken };
+    else {
+      // Some MINI Apps issue only an access token. Request profile consent if needed; the backend verifies identity independently.
+      let permission;
+      if (window.liff.permission?.query) {
+        try { permission = await bounded(window.liff.permission.query('profile'), '確認 LINE 授權逾時，請稍後重試。'); } catch { /* The server still checks the granted scopes. */ }
+      }
+      if (permission?.state === 'unavailable') throw loginError('目前尚未開放登入所需的 LINE 授權，請聯絡票匣管理者。');
+      if (permission?.state === 'prompt' && window.liff.getProfile) {
+        $('gate-message').textContent = '請在 LINE 授權畫面允許取得個人資料，以開啟你的私人票匣。';
+        await bounded(window.liff.getProfile(), 'LINE 授權尚未完成，請重新開啟票匣後再試。', 60000);
+      }
+      const accessToken = window.liff.getAccessToken?.();
+      if (!accessToken) throw loginError('LINE 未完成身分授權，請點「重新在 LINE 開啟」後再試。');
+      credential = { accessToken };
+    }
+    $('gate-message').textContent = '正在開啟你的私人票匣…';
+    await enter(await api('/auth/line', { method: 'POST', body: credential, signal: AbortSignal.timeout(15000) }));
+  } catch (error) {
+    if (error.status === 401 && !window.liff?.isInClient?.()) { window.liff?.logout?.(); sdkInitializing = null; }
+    gate(error.userMessage || error.status ? error.message : 'LINE 授權暫時無法完成，請再試一次，或重新在 LINE 開啟票匣。', true);
+  }
+  finally { loginInFlight = false; $('login').disabled = false; $('login').textContent = '使用 LINE 登入'; }
 }
 $('query').addEventListener('input', () => { clearTimeout(queryTimer); listController?.abort(); queryTimer = setTimeout(() => { page = 1; void load(); }, 250); });
 $('year').addEventListener('change', () => { page = 1; void load(); });

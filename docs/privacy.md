@@ -16,7 +16,7 @@
 
 票匣表單按下儲存後直接寫入同一 SQLite，新增與編輯不呼叫 Gemini。搜尋電影名稱會傳給 TMDB；不傳送心得、同伴或 LINE 使用者 ID 給 TMDB。手動填寫片名則不需要電影資料查詢。
 
-票匣使用 HttpOnly、Secure、SameSite=Lax cookie 保存短期 session；session 與單次入口只存在伺服器記憶體，不寫入瀏覽器 localStorage。正式 LIFF 登入會將 ID token 送至 LINE 官方驗證，token 不寫入日誌或資料庫。未設定 LIFF 時使用 Bot 發出的兩分鐘單次專屬入口，請勿轉傳。登入 session 最長一小時，重啟服務即失效。
+票匣使用 HttpOnly、Secure、SameSite=Lax cookie 保存短期 session；session 與單次入口只存在伺服器記憶體，不寫入瀏覽器 localStorage。正式 LIFF 登入會將 ID token 送至 LINE 官方驗證；未提供 ID token 時，後端驗證使用者 access token 的 Channel ID、有效期及授權，再向 LINE 取得必要的使用者 ID 與顯示名稱。token 不寫入日誌或資料庫，且不信任前端自行提供的使用者身分。未設定 LIFF 時使用 Bot 發出的兩分鐘單次專屬入口，請勿轉傳。登入 session 最長一小時，重啟服務即失效。
 
 刪除票根時同步刪除資料庫中的票根與對應聊天草稿；去重請求 ID 仍保留，防止舊請求重新新增。SQLite 歷史頁面與每日備份可能保留舊內容；目前每日備份保留最近七份，且與主資料庫位於同一磁碟。若需處理備份中的資料刪除，請聯絡部署者。示範模式只使用頁面記憶體中的虛構資料，重新整理即還原。
 

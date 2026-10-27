@@ -28,9 +28,10 @@ function checked(schema, value) {
 }
 export class TicketShelf {
   constructor({ store, auth, catalog, liffId = '', liffAppType = 'liff' }) { Object.assign(this, { store, auth, catalog, liffId, liffAppType }); }
+  get liffUrl() { return this.liffId && this.auth.channelId ? `https://${this.liffAppType === 'miniapp' ? 'miniapp' : 'liff'}.line.me/${this.liffId}` : ''; }
   entry(actor) {
     return { text: '你的私人票匣在這裡。可查看已看過的電影，也能新增、編輯心得。' + (this.liffId && this.auth.channelId ? '請使用 LINE 登入後開啟。' : '專屬入口限本人使用，請勿轉傳；兩分鐘內開啟，使用一次後失效。'),
-      actions: [{ label: '開啟我的票匣', uri: this.liffId && this.auth.channelId ? `https://${this.liffAppType === 'miniapp' ? 'miniapp' : 'liff'}.line.me/${this.liffId}` : this.auth.createEntry(actor) }] };
+      actions: [{ label: '開啟我的票匣', uri: this.liffUrl || this.auth.createEntry(actor) }] };
   }
   async ticketInput(raw) {
     const value = checked(inputSchema, raw);
@@ -66,13 +67,16 @@ export class TicketShelf {
       }
       if (!url.pathname.startsWith('/api/')) throw new AuthError(404, '找不到這個頁面。');
       if (url.pathname === '/api/config' && request.method === 'GET') {
-        send(200, { liffId: this.liffId, lineLoginReady: !!(this.liffId && this.auth.channelId) }); return true;
+        send(200, { liffId: this.liffId, lineLoginReady: !!this.liffUrl, liffUrl: this.liffUrl }); return true;
       }
       if (['/api/auth/line', '/api/auth/entry'].includes(url.pathname) && request.method === 'POST') {
         this.auth.requireOrigin(request); this.auth.limitLogin(request);
         const value = await body(request);
-        const result = url.pathname.endsWith('/line') ? await this.auth.loginLine(request, response, checked(z.object({ idToken: z.string() }).strict(), value).idToken)
-          : this.auth.redeemEntry(request, response, checked(z.object({ token: z.string() }).strict(), value).token);
+        let result;
+        if (url.pathname.endsWith('/line')) {
+          const credential = checked(z.union([z.object({ idToken: z.string() }).strict(), z.object({ accessToken: z.string() }).strict()]), value);
+          result = 'idToken' in credential ? await this.auth.loginLine(request, response, credential.idToken) : await this.auth.loginAccessToken(request, response, credential.accessToken);
+        } else result = this.auth.redeemEntry(request, response, checked(z.object({ token: z.string() }).strict(), value).token);
         send(200, result); return true;
       }
       const session = request.method === 'GET' ? this.auth.session(request) : this.auth.requireWrite(request);

@@ -69,7 +69,11 @@ LIFF_APP_TYPE=liff
 
 ## 身分與資料
 
-LIFF SDK 只取得 ID token；後端送交 LINE `/oauth2/v2.1/verify` 驗證，檢查 issuer、audience、到期時間與 subject，再建立一小時內的 HttpOnly session。每個查詢都使用後端 session 的 actor，前端不能指定其他使用者 ID。修改需通過 Origin 與 CSRF 檢查。
+優先使用 LIFF SDK 取得的 ID token，後端送交 LINE `POST /oauth2/v2.1/verify` 驗證 issuer、audience、到期時間與 subject。若 LINE 已登入卻未提供 ID token，則使用 SDK 的使用者 access token：後端先呼叫 `GET /oauth2/v2.1/verify` 核對 Channel ID、有效期與 `profile` scope，再透過 LINE `GET /v2/profile` 取得身分。兩種流程都只能由 LINE 伺服器回應決定 actor，不接受前端傳入的 userId 或解碼後的 profile。
+
+若需要 `profile` 同意，前端先確認授權狀態並透過 SDK 顯示必要的同意流程；授權後重新讀取 access token。任一驗證失敗都不建立 session。token 只經 HTTPS 傳給後端及 LINE，不寫入資料庫或日誌。每個查詢使用後端 session 的 actor，修改仍需通過 Origin 與 CSRF 檢查。
+
+登入元件載入、初始化與後端請求都有等待上限。失敗後登入按鈕會恢復可點擊，另提供正式 MINI App 重新開啟連結。若原 channel 同時沒有 `openid` 與 `profile`，管理者仍須在 LINE Console 啟用其中一種可驗證身分的授權；本程式不會略過 LINE 身分驗證。
 
 未設定 LIFF 時，Bot 只對已驗簽的一對一 LINE 事件發送一次性隨機入口，兩分鐘失效、同一使用者的新入口會取代舊入口；token 放在 URL fragment，前端立即移除並兌換 session。這仍是持有連結即可登入的入口，請勿轉傳。伺服器只在記憶體保留其雜湊，重啟即失效。
 

@@ -114,7 +114,7 @@ test('static shell has restricted CSP and demo never exposes server data', async
   assert.equal(await shelf.handle({ url: 'http://%' }, { writeHead: value => { status = value; }, end: () => {} }), true);
   assert.equal(status, 400);
   assert.equal((await call('/tickets/../src/store.mjs')).status, 404); assert.equal((await call('/api/tickets?preview=1')).status, 401);
-  const config = await (await call('/api/config')).json(); assert.deepEqual(config, { liffId: '', lineLoginReady: false });
+  const config = await (await call('/api/config')).json(); assert.deepEqual(config, { liffId: '', lineLoginReady: false, liffUrl: '' });
 });
 
 test('TMDB catalog validates poster paths and provides manual-entry fallback', async () => {
@@ -133,4 +133,55 @@ test('MINI App uses canonical link with matching channel configuration', () => {
   assert.throws(() => config({ ...env, LINE_LOGIN_CHANNEL_ID: '2012222034' }), /同一個環境/);
   assert.throws(() => config({ ...env, LIFF_APP_TYPE: 'https://evil.invalid' }), /LIFF_APP_TYPE/);
   assert.throws(() => config({ ...env, LIFF_ID: '' }), /成對設定/);
+});
+
+test('access-token login verifies channel, expiry and profile with LINE before creating a session', async () => {
+  const now = Date.now(); const actor = 'U' + 'b'.repeat(32); const calls = [];
+  let verified = { client_id: '2012222034', expires_in: 120, scope: 'profile' };
+  const auth = new ShelfAuth({ channelId: '2012222034', baseUrl: 'https://example.com', now: () => now, fetcher: async (url, options) => {
+    calls.push(String(url));
+    if (new URL(url).pathname === '/oauth2/v2.1/verify') { assert.equal(new URL(url).searchParams.get('access_token'), 'fixture-user-access-token'); return { ok: true, json: async () => verified }; }
+    assert.equal(String(url), 'https://api.line.me/v2/profile'); assert.equal(options.headers.Authorization, 'Bearer fixture-user-access-token');
+    return { ok: true, json: async () => ({ userId: actor, displayName: 'LINE 回傳的名字' }) };
+  } });
+  let cookie; const request = { headers: {} }, response = { setHeader: (key, value) => { cookie = value.split(';')[0]; assert.match(value, /HttpOnly.*Secure/); } };
+  const session = await auth.loginAccessToken(request, response, 'fixture-user-access-token');
+  assert.equal(session.user.displayName, 'LINE 回傳的名字');
+  assert.equal(auth.session({ headers: { cookie } }).actor, actor);
+  assert.equal(auth.session({ headers: { cookie } }).expires, now + 120000);
+  assert.equal(calls.length, 2);
+  for (const value of [{ ...verified, client_id: '2012222030' }, { ...verified, expires_in: 0 }, { ...verified, expires_in: '120' }]) {
+    verified = value; calls.length = 0;
+    await assert.rejects(auth.loginAccessToken(request, response, 'fixture-user-access-token'), { status: 401 });
+    assert.equal(calls.length, 1, 'foreign or expired credentials must never reach profile lookup');
+  }
+  verified = { client_id: '2012222034', expires_in: 120, scope: 'openid' }; calls.length = 0;
+  await assert.rejects(auth.loginAccessToken(request, response, 'fixture-user-access-token'), { status: 403 }); assert.equal(calls.length, 1);
+  await assert.rejects(auth.loginAccessToken(request, response, 'fixture-user-access-token\r\nInjected: 1'), { status: 401 });
+});
+
+test('access-token API accepts credentials only and never accepts a browser-supplied userId', async t => {
+  const { auth, call, base } = await setup(t); auth.channelId = '2012222034'; let fetches = 0;
+  auth.fetcher = async url => { fetches++; return { ok: true, json: async () => new URL(url).pathname.endsWith('/verify') ? { client_id: '2012222034', expires_in: 3600, scope: 'profile' } : { userId: 'U' + 'c'.repeat(32), displayName: '已驗證' } }; };
+  const login = value => call('/api/auth/line', { method: 'POST', headers: { Origin: base }, body: JSON.stringify(value) });
+  for (const value of [{ accessToken: 'fixture-user-access-token', userId: 'victim' }, { accessToken: 'fixture-user-access-token', idToken: 'ambiguous' }, { userId: 'victim' }]) assert.equal((await login(value)).status, 400);
+  assert.equal(fetches, 0);
+  const response = await login({ accessToken: 'fixture-user-access-token' }); assert.equal(response.status, 200);
+  assert.equal((await response.json()).user.displayName, '已驗證'); assert.equal(fetches, 2);
+  const cookie = response.headers.get('set-cookie').split(';')[0]; assert.equal((await call('/api/tickets', { headers: { Cookie: cookie } })).status, 200);
+});
+
+test('access-token network errors, invalid profiles and expiry during lookup cannot log in', async () => {
+  for (const failure of ['network', 'upstream', 'invalid-profile', 'expires']) {
+    let now = Date.now(); let cookies = 0;
+    const auth = new ShelfAuth({ channelId: '123', baseUrl: 'https://example.com', now: () => now, fetcher: async url => {
+      if (failure === 'network') throw new Error('private upstream details');
+      if (failure === 'upstream') return { status: 500, ok: false };
+      if (new URL(url).pathname.endsWith('/verify')) return { ok: true, json: async () => ({ client_id: '123', expires_in: 1, scope: 'profile' }) };
+      if (failure === 'expires') now += 2000;
+      return { ok: true, json: async () => ({ userId: failure === 'invalid-profile' ? 'forged' : 'U' + 'd'.repeat(32) }) };
+    } });
+    await assert.rejects(auth.loginAccessToken({ headers: {} }, { setHeader: () => cookies++ }, 'fixture-user-access-token'), { status: ['network', 'upstream'].includes(failure) ? 503 : 401 });
+    assert.equal(cookies, 0); assert.equal(auth.sessions.size, 0);
+  }
 });
