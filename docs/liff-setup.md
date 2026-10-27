@@ -1,6 +1,31 @@
 # 正式 LIFF 登入設定
 
-票匣程式與短效 LINE 入口已備妥；目前還沒有 LIFF channel，以下是建立時的實際設定。
+目前使用 **LINE MINI App**。三個 internal channel 是同一個 MINI App 的不同環境，每一組都有自己的 LIFF ID；後端一次只設定一組，不會同時接受其他環境的登入憑證。
+
+## 目前使用的 MINI App
+
+| 環境 | Channel ID | LIFF ID / 狀態 |
+| --- | --- | --- |
+| Developing | `2012222030` | `2012222030-OFWyoaEd`，目前接入供測試 |
+| Review | `2012222032` | 尚未提供對應 LIFF ID，未啟用 |
+| Published | `2012222034` | 尚未提供對應 LIFF ID，未啟用 |
+
+[Developing MINI App 入口](https://miniapp.line.me/2012222030-OFWyoaEd)。在 LINE Developers 的 **Web app settings** 確認 Developing Endpoint URL 為 `https://movie-bot-03.136-67-154-252.sslip.io/tickets/`，儲存後再開啟入口。若仍是 `https://developers.line.biz/assets/liff-default-dev.html`，會開啟 LINE 示範頁而不是票匣。
+
+Developing 僅提供給已接受權限邀請的測試者。需要在 Roles 管理測試權限，並確認開啟 MINI App 的 LINE 帳號就是受邀帳號。Provider 必須與 Zona Movie 一致，才能讀到既有票根。
+
+雲端應用設定：
+
+```dotenv
+LIFF_ID=2012222030-OFWyoaEd
+LINE_LOGIN_CHANNEL_ID=2012222030
+LIFF_APP_TYPE=miniapp
+PUBLIC_BASE_URL=https://movie-bot-03.136-67-154-252.sslip.io
+```
+
+`LINE_LOGIN_CHANNEL_ID` 沿用程式設定名稱，也適用 MINI App。這不是原 Messaging API 的 Channel ID。正式對外使用時，請取得 Published 那一組的 LIFF URL，同時替換兩個 ID，並依 LINE 流程確認 Published 的 endpoint 與開放狀態。不可只替換 Channel ID，也不可假設三組 LIFF ID 的後綴相同。
+
+參考：[MINI App Console 指南](https://developers.line.biz/en/docs/line-mini-app/discover/console-guide/)。以下保留一般 LINE Login LIFF 的自架設定流程。
 
 ## LINE Developers
 
@@ -26,6 +51,7 @@
 ```dotenv
 LIFF_ID=1234567890-abcdefgh
 LINE_LOGIN_CHANNEL_ID=1234567890
+LIFF_APP_TYPE=liff
 ```
 
 上方是格式範例，不能直接使用。`PUBLIC_BASE_URL` 維持 `https://movie-bot-03.136-67-154-252.sslip.io`。
@@ -48,3 +74,10 @@ LIFF SDK 只取得 ID token；後端送交 LINE `/oauth2/v2.1/verify` 驗證，�
 只有 `?preview=1` 是公開示範：前端獨立的虛構資料，不能略過後端身分驗證，也不會寫入正式 SQLite。
 
 參考：[LIFF 註冊](https://developers.line.biz/en/docs/liff/registering-liff-apps/)、[安全使用使用者資料](https://developers.line.biz/en/docs/liff/using-user-profile/)、[Provider 與使用者 ID](https://developers.line.biz/en/docs/messaging-api/getting-user-ids/)。
+
+
+## 登入導回頁面
+
+LINE 的初次導回 URL 可能含 SDK 初始化使用的參數。程式必須先完成 `liff.init()`，再由 SDK 清除 LINE 憑證資訊；不得先刪掉整個 URL fragment。只有 Bot 自己的 `#entry=` 一次性入口會在兌換前移除。即使瀏覽器已有舊 session，也會重新驗證目前的 LINE 身分，避免切換 LINE 帳號後沿用另一個帳號的票匣。
+
+參考：[LIFF 初始化與 URL 處理](https://developers.line.biz/en/docs/liff/developing-liff-apps/)。

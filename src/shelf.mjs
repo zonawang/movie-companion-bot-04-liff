@@ -27,10 +27,10 @@ function checked(schema, value) {
   return result.data;
 }
 export class TicketShelf {
-  constructor({ store, auth, catalog, liffId = '' }) { Object.assign(this, { store, auth, catalog, liffId }); }
+  constructor({ store, auth, catalog, liffId = '', liffAppType = 'liff' }) { Object.assign(this, { store, auth, catalog, liffId, liffAppType }); }
   entry(actor) {
     return { text: '你的私人票匣在這裡。可查看已看過的電影，也能新增、編輯心得。' + (this.liffId && this.auth.channelId ? '請使用 LINE 登入後開啟。' : '專屬入口限本人使用，請勿轉傳；兩分鐘內開啟，使用一次後失效。'),
-      actions: [{ label: '開啟我的票匣', uri: this.liffId && this.auth.channelId ? `https://liff.line.me/${this.liffId}` : this.auth.createEntry(actor) }] };
+      actions: [{ label: '開啟我的票匣', uri: this.liffId && this.auth.channelId ? `https://${this.liffAppType === 'miniapp' ? 'miniapp' : 'liff'}.line.me/${this.liffId}` : this.auth.createEntry(actor) }] };
   }
   async ticketInput(raw) {
     const value = checked(inputSchema, raw);

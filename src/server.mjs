@@ -16,7 +16,7 @@ try {
   const bot = new MovieCompanion({ store, movies, model: settings.model, maps: new GoogleMapsSource({ apiKey: settings.mapsApiKey }) });
   const server = createWebhookServer({
     secret: settings.channelSecret, store, bot,
-    shelf: new TicketShelf({ store, auth: new ShelfAuth({ channelId: settings.loginChannelId, baseUrl: settings.publicBaseUrl, secureCookies: settings.publicBaseUrl.startsWith('https:') }), catalog: new ShelfCatalog({ token: settings.tmdbToken }), liffId: settings.liffId }),
+    shelf: new TicketShelf({ store, auth: new ShelfAuth({ channelId: settings.loginChannelId, baseUrl: settings.publicBaseUrl, secureCookies: settings.publicBaseUrl.startsWith('https:') }), catalog: new ShelfCatalog({ token: settings.tmdbToken }), liffId: settings.liffId, liffAppType: settings.liffAppType }),
     reply: (replyToken, messages) => replyToLine(settings.channelToken, replyToken, messages),
   });
   server.listen(settings.port, '127.0.0.1', () => {

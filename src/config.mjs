@@ -16,6 +16,9 @@ export function config(env = process.env, { line = false } = {}) {
   const liffId = env.LIFF_ID?.trim() || '', loginChannelId = env.LINE_LOGIN_CHANNEL_ID?.trim() || '';
   if (liffId && !/^\d+-[A-Za-z0-9]+$/.test(liffId)) throw new Error('LIFF_ID 格式不正確');
   if (loginChannelId && !/^\d+$/.test(loginChannelId)) throw new Error('LINE_LOGIN_CHANNEL_ID 必須是數字');
+  const liffAppType = env.LIFF_APP_TYPE?.trim() || 'liff';
+  if (!['liff', 'miniapp'].includes(liffAppType)) throw new Error('LIFF_APP_TYPE 請設為 liff 或 miniapp');
+  if (!!liffId !== !!loginChannelId || (liffId && liffId.split('-')[0] !== loginChannelId)) throw new Error('LIFF_ID 與 LINE_LOGIN_CHANNEL_ID 必須成對設定為同一個環境');
   return {
     mode, port, model: env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
     database: env.SQLITE_PATH || './data/movie-bot.sqlite',
@@ -23,6 +26,6 @@ export function config(env = process.env, { line = false } = {}) {
     channelToken: env.LINE_CHANNEL_ACCESS_TOKEN,
     tmdbToken: env.TMDB_READ_ACCESS_TOKEN?.trim(),
     mapsApiKey: env.GOOGLE_MAPS_API_KEY?.trim(),
-    publicBaseUrl: base.origin, liffId, loginChannelId,
+    publicBaseUrl: base.origin, liffId, loginChannelId, liffAppType,
   };
 }

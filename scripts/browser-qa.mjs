@@ -33,5 +33,25 @@ await mkdir('browser-results', { recursive: true });
  assert.equal(await page.evaluate(()=>document.querySelector('#editor').scrollWidth<=document.querySelector('#editor').clientWidth),true);
  await page.goto('http://127.0.0.1:3104/tickets/'); await page.locator('#line-link').waitFor();
  assert.match(await page.locator('#gate-message').innerText(),/我的票匣/);
+ // Intercept only in this test browser: simulate LINE redirect and SDK without real user credentials.
+ const loginPage = await browser.newPage(); let exchanges = 0;
+ const emptyShelf = { tickets: [], total: 0, pageCount: 1, years: [], stats: { total: 0, thisYear: 0, withNotes: 0 } };
+ await loginPage.route('**/api/config', route => route.fulfill({ json: { liffId: '2012222030-OFWyoaEd', lineLoginReady: true } }));
+ await loginPage.route('**/api/session', route => route.fulfill({ json: { user: { displayName: '舊帳號' }, csrfToken: 'old-session' } }));
+ await loginPage.route('https://static.line-scdn.net/liff/edge/2/sdk.js', route => route.fulfill({ contentType: 'text/javascript', body: `window.liff={init:async function(options){window.sdkInput={hash:location.hash,liffId:options.liffId};history.replaceState(null,'',location.pathname+location.search)},isLoggedIn:()=>true,getIDToken:()=>'fixture-id-token-from-line',logout:()=>{}}` }));
+ await loginPage.route('**/api/auth/line', async route => { assert.equal(route.request().postDataJSON().idToken, 'fixture-id-token-from-line'); exchanges++; await route.fulfill({ json: { user: { displayName: '目前 LINE 帳號' }, csrfToken: 'new-csrf' } }); });
+ await loginPage.route('**/api/tickets?*', route => route.fulfill({ json: emptyShelf }));
+ await loginPage.goto('http://127.0.0.1:3104/tickets/#access_token=fixture-only&id_token=fixture-only');
+ await loginPage.waitForFunction(() => document.getElementById('user-name').textContent === '目前 LINE 帳號');
+ assert.deepEqual(await loginPage.evaluate(()=>window.sdkInput), { hash: '#access_token=fixture-only&id_token=fixture-only', liffId: '2012222030-OFWyoaEd' });
+ assert.equal(exchanges,1); assert.equal(new URL(loginPage.url()).hash,'');
+ await loginPage.goto('http://127.0.0.1:3104/tickets/');
+ await loginPage.waitForFunction(() => document.getElementById('user-name').textContent === '目前 LINE 帳號');
+ assert.equal(exchanges,2); // A previous cookie/session must never skip initialization for a different LINE account.
+ await loginPage.route('**/api/auth/entry', async route => { assert.equal(route.request().postDataJSON().token, 'fixture-entry'); await route.fulfill({ json: { user: { displayName: '入口使用者' }, csrfToken: 'entry-csrf' } }); });
+ await loginPage.goto('http://127.0.0.1:3104/tickets/#entry=fixture-entry');
+ await loginPage.waitForFunction(() => document.getElementById('user-name').textContent === '入口使用者');
+ assert.equal(new URL(loginPage.url()).hash,'');
+ await loginPage.close();
  assert.deepEqual(errors,[]); console.log('Browser QA passed: desktop/mobile, filters, add/edit/delete, verbatim note, XSS, unauthenticated gate, no overflow.'); await browser.close();
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>server.kill('SIGTERM'));

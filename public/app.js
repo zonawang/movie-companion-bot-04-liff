@@ -160,15 +160,17 @@ $('editor').addEventListener('cancel', event => { if (saving) event.preventDefau
 $('login').addEventListener('click', () => { void lineLogin(); });
 $('logout').addEventListener('click', async () => { try { await api('/logout', { method: 'POST', body: {} }); csrf = ''; window.liff?.logout(); selected = null; $('grid').replaceChildren(); $('user-name').textContent = ''; gate('已登出。請回到 LINE 輸入「我的票匣」重新開啟。', !!liffConfig?.lineLoginReady); } catch (error) { notice(error.message); } });
 async function start() {
-  // Erase the one-time secret before requests, SDK loads or navigation. Never persist identity tokens in browser storage.
-  const entry = new URLSearchParams(location.hash.slice(1)).get('entry'); if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  // Only erase our own entry token. LINE redirect parameters must reach liff.init(), which removes LINE credentials itself.
+  const entry = new URLSearchParams(location.hash.slice(1)).get('entry'); if (entry !== null) history.replaceState(null, '', location.pathname + location.search);
   if (demo) { $('demo-banner').hidden = false; await enter({ user: { displayName: '電影旅人' } }); return; }
   try {
     if (entry) { await enter(await api('/auth/entry', { method: 'POST', body: { token: entry } })); return; }
-    try { await enter(await api('/session')); return; } catch (error) { if (error.status !== 401) throw error; }
     liffConfig = await api('/config');
     if (liffConfig.lineLoginReady) { gate('正在確認你的 LINE 身分…', true); await lineLogin(); }
-    else gate('請在 Zona Movie 聊天室輸入「我的票匣」，\n點開專屬入口，就能查看自己的觀影紀錄。');
+    else {
+      try { await enter(await api('/session')); return; } catch (error) { if (error.status !== 401) throw error; }
+      gate('請在 Zona Movie 聊天室輸入「我的票匣」，\n點開專屬入口，就能查看自己的觀影紀錄。');
+    }
   } catch (error) { gate(error.message, !!liffConfig?.lineLoginReady); }
 }
 void start();

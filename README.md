@@ -18,9 +18,11 @@
 - [示範票匣](https://movie-bot-03.136-67-154-252.sslip.io/tickets/?preview=1)：虛構電影，資料只在當前頁面記憶體，重新整理即還原。
 - [Zona Movie LINE 聊天室](https://line.me/R/ti/p/@796qcwyz)
 
-目前尚未建立 LIFF channel，因此先使用已驗證 LINE webhook 發出的兩分鐘、單次專屬入口。請勿轉傳此入口。登入有效一小時，服務重啟後需重新開啟。
+目前使用 LINE MINI App 的 **Developing 環境**：Channel ID `2012222030`、LIFF ID `2012222030-OFWyoaEd`。入口是 [Zona Movie MINI App](https://miniapp.line.me/2012222030-OFWyoaEd)，需使用已接受測試邀請的 LINE 帳號。這不是公開給所有使用者的 Published 環境。
 
-正式 LIFF 登入程式已實作，需在 **Zona Movie 所屬的同一個 Provider** 建立 LINE Login channel／LIFF app，再設定 `LIFF_ID` 與 `LINE_LOGIN_CHANNEL_ID`。尚未填入前，不會假裝已完成 LIFF 註冊。[完整設定](docs/liff-setup.md)
+LINE Developers 的 Developing Endpoint URL 必須設為 `https://movie-bot-03.136-67-154-252.sslip.io/tickets/`。後端登入與正式 LINE 帳號的實際驗收分開確認；部署完成並不代表真人登入已驗收。對外開放時，需要 Published Channel ID 與它自己的 LIFF ID 成對切換，不能混用 Developing 的 ID。[完整設定](docs/liff-setup.md)
+
+未設定 LIFF 的自架版本仍可使用已驗簽 LINE webhook 發出的兩分鐘、單次專屬入口。請勿轉傳此入口。登入有效最多一小時，服務重啟後需重新開啟。
 
 ## 本機執行
 

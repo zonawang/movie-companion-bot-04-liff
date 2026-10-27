@@ -6,6 +6,7 @@ import { ShelfAuth } from '../src/shelf-auth.mjs';
 import { TicketShelf } from '../src/shelf.mjs';
 import { createWebhookServer } from '../src/app.mjs';
 import { ShelfCatalog } from '../src/shelf-catalog.mjs';
+import { config } from '../src/config.mjs';
 
 const input = { movieTitle: '測試電影', watchedOn: '2025-10-01', cinema: '小影院', companions: '朋友', note: '  我的原話\n<script>不應執行</script>  ', movieId: null };
 const catalog = { details: async id => ({ id, title: '伺服器確認的片名', posterPath: '/poster.jpg' }), search: async () => ({ available: true, movies: [] }) };
@@ -120,4 +121,16 @@ test('TMDB catalog validates poster paths and provides manual-entry fallback', a
   assert.deepEqual(await new ShelfCatalog().search('電影'), { available: false, movies: [] });
   const source = new ShelfCatalog({ token: 'server-token', fetcher: async (url, options) => { assert.equal(options.headers.Authorization, 'Bearer server-token'); return { ok: true, json: async () => ({ results: [{ id: 1, title: '電影', poster_path: '//evil.example/x.jpg' }, { id: 2, title: '成人', adult: true }] }) }; } });
   const result = await source.search('電影'); assert.equal(result.movies.length, 1); assert.equal(result.movies[0].posterPath, null);
+});
+
+test('MINI App uses canonical link with matching channel configuration', () => {
+  const env = { GEMINI_API_KEY: 'fixture', LIFF_ID: '2012222030-OFWyoaEd', LINE_LOGIN_CHANNEL_ID: '2012222030', LIFF_APP_TYPE: 'miniapp' };
+  const settings = config(env);
+  const auth = new ShelfAuth({ channelId: settings.loginChannelId, baseUrl: 'https://example.com' });
+  const shelf = new TicketShelf({ auth, liffId: settings.liffId, liffAppType: settings.liffAppType });
+  assert.equal(shelf.entry('A').actions[0].uri, 'https://miniapp.line.me/2012222030-OFWyoaEd');
+  assert.equal(auth.entries.size, 0);
+  assert.throws(() => config({ ...env, LINE_LOGIN_CHANNEL_ID: '2012222034' }), /同一個環境/);
+  assert.throws(() => config({ ...env, LIFF_APP_TYPE: 'https://evil.invalid' }), /LIFF_APP_TYPE/);
+  assert.throws(() => config({ ...env, LIFF_ID: '' }), /成對設定/);
 });

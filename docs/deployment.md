@@ -86,3 +86,10 @@ Google Free Tier 提供符合資格地區的每月一台 e2-micro 使用時數�
 登入與專屬入口暫存在單一程序記憶體，重啟會失效。此版本適用目前單 VM、單程序；若改成多台或多 worker，應先導入共用 session／入口儲存，再擴展服務。公開網頁與 API 都不快取私人回應；不要在反向代理開啟私人 API 快取或記錄 cookie／入口內容。
 
 票匣 CRUD 不呼叫 Gemini；電影選擇會使用既有 TMDB token。地圖與聊天功能仍沿用原服務和用量設定。
+
+
+## 2026-10-27 MINI App Developing 設定
+
+目前已取得 Developing LIFF ID `2012222030-OFWyoaEd`，配對 Channel ID `2012222030`，`LIFF_APP_TYPE=miniapp`。Bot 入口使用 `https://miniapp.line.me/`，後端驗證仍固定檢查該 Channel ID 的 audience。Review／Published 尚未啟用。
+
+LINE Console 的 Endpoint URL 與測試者邀請需另行確認，與 Google Cloud Secret Manager 設定是不同的操作。更新前會建立 `pre-miniapp-20261027.sqlite` 線上備份，保留既有票根；設定更新後需重新載入服務。
