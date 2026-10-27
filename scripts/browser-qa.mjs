@@ -34,7 +34,7 @@ await mkdir('browser-results', { recursive: true });
  await page.goto('http://127.0.0.1:3104/tickets/'); await page.locator('#line-link').waitFor();
  assert.match(await page.locator('#gate-message').innerText(),/我的票匣/);
  // Intercept only in this test browser: simulate LINE redirect and SDK without real user credentials.
- const loginPage = await browser.newPage(); let exchanges = 0;
+ const loginPage = await browser.newPage(); let exchanges = 0; loginPage.on('pageerror', error => errors.push(error.message));
  const emptyShelf = { tickets: [], total: 0, pageCount: 1, years: [], stats: { total: 0, thisYear: 0, withNotes: 0 } };
  await loginPage.route('**/api/config', route => route.fulfill({ json: { liffId: '2012222030-OFWyoaEd', lineLoginReady: true } }));
  await loginPage.route('**/api/session', route => route.fulfill({ json: { user: { displayName: '舊帳號' }, csrfToken: 'old-session' } }));
@@ -49,6 +49,7 @@ await mkdir('browser-results', { recursive: true });
  await loginPage.waitForFunction(() => document.getElementById('user-name').textContent === '目前 LINE 帳號');
  assert.equal(exchanges,2); // A previous cookie/session must never skip initialization for a different LINE account.
  await loginPage.route('**/api/auth/entry', async route => { assert.equal(route.request().postDataJSON().token, 'fixture-entry'); await route.fulfill({ json: { user: { displayName: '入口使用者' }, csrfToken: 'entry-csrf' } }); });
+ await loginPage.goto('about:blank'); // Model opening the Bot entry in a new navigation, not an in-page hash change.
  await loginPage.goto('http://127.0.0.1:3104/tickets/#entry=fixture-entry');
  await loginPage.waitForFunction(() => document.getElementById('user-name').textContent === '入口使用者');
  assert.equal(new URL(loginPage.url()).hash,'');
